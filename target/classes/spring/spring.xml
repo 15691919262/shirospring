@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context.xsd">
+    <!--引入spring-dao.xml-->
+    <import resource="spring-dao.xml" />
+    <!--引入spring-redis.xml -->
+    <import resource="spring-redis.xml" />
+
+    <!--配置扫描路径-->
+    <context:component-scan base-package="com.sunny"/>
+
+    <!--shiroFilter的实现，此id对应web.xml中的DelegatingFilterProxy的filter-Name-->
+    <bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+        <property name="securityManager" ref="securityManager" />
+        <property name="loginUrl" value="login.html" />
+        <property name="unauthorizedUrl" value="403.html" />
+        <property name="filterChainDefinitions">
+            <value>
+                /login.html = anon
+                /userLogin = anon
+                /testRole2 = roles[admin,admin1]<!--同时具备admin、admin1角色才可以访问-->
+                /testPermission2 = perms[user:delete,user:deleteAll]<!--同时具备user:delete、user:deleteAll权限才可以访问-->
+                /testRoleOr = roleOrFilter[admin,admin1]<!--此处只要具有admin角色就可以访问-->
+                /* = authc
+            </value>
+            <!--
+            shiro 内置过滤器，过滤器链从上到下进行匹配
+            1、认证相关
+                anon        不需要任何认证，直接可以访问
+                authBasic   httpBasic
+                authc       需要认证之后才可以访问
+                user        需要当前存在用户才可以访问
+                logout      退出后访问
+            2、授权相关
+                perms       需要具备相关权限才可以访问（多个时为并且关系）
+                roles       需要剧本相关角色才可以访问（多个时为并且关系）
+                ssl         要求安全协议，即HTTPS才可以访问
+                port        要求是相关端口才可以访问
+            -->
+        </property>
+    </bean>
+
+    <!--创建securityManager对象-->
+    <bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+        <property name="realm" ref="myRealm"/>
+        <property name="sessionManager" ref="mySessionManager"/>
+        <property name="cacheManager" ref="redisCacheManager"/>
+        <property name="rememberMeManager" ref="rememberMeManager"/>
+    </bean>
+
+    <!--自定义realm，进行校验-->
+    <bean id="myRealm" class="com.sunny.customRealm.MySecurityRealm">
+        <property name="credentialsMatcher" ref="credentialsMatcher" />
+    </bean>
+
+    <!--credentialsMatcher进行加密-->
+    <bean id="credentialsMatcher" class="org.apache.shiro.authc.credential.HashedCredentialsMatcher">
+        <property name="hashAlgorithmName" value="md5" />
+        <property name="hashIterations" value="1" />
+    </bean>
+
+    <!--注入自定授权过滤器RoleOrFilter-->
+    <bean id="roleOrFilter" class="com.sunny.filter.RoleOrFilter"/>
+
+
+    <bean id="mySessionManager" class="com.sunny.session.MySessionManager">
+        <property name="sessionDAO" ref="myRedisSessionDao"/>
+    </bean>
+    <bean id="myRedisSessionDao" class="com.sunny.session.MyRedisSessionDao"/>
+
+    <bean id="rememberMeManager" class="org.apache.shiro.web.mgt.CookieRememberMeManager">
+        <property name="cookie" ref="simpleCookie"/>
+    </bean>
+    <bean id="simpleCookie" class="org.apache.shiro.web.servlet.SimpleCookie">
+        <constructor-arg value="sunny_shiro_cookie_test"/><!--客户端保存cookie的名称-->
+        <property name="maxAge" value="#{7*24*60*60}"/><!--最大有效期，单位秒-->
+    </bean>
+
+</beans>
